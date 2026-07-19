@@ -2,18 +2,29 @@ use axum::{routing::{get,post},Router,};
 
 use handlers::{root,register};
 
+use db::init_db;
+
+
+
+
 
 mod models;
 mod handlers;
+mod db;
 
 
 
 
 #[tokio::main]
 async fn main() {
-    let app = Router::new()
-        .route("/", get(root))
-        .route("/register", post(register));
+    let _pool= init_db().await;
+    db::create_users_table(&_pool).await;
+
+
+let app = Router::new()
+    .route("/", get(root))
+    .route("/register", post(register))
+    .with_state(_pool);
 
 
 
