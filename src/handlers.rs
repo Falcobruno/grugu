@@ -76,7 +76,7 @@ if user.relationship_years > 100 {
 pub async fn list_users(
     State(pool): State<SqlitePool>
 ) -> impl IntoResponse {
-    let rows = match sqlx::query("SELECT name, age, relationship_years FROM users")
+    let rows = match sqlx::query("SELECT name, age, relationship_years FROM users WHERE active = 1")
         .fetch_all(&pool)
         .await{
     Ok(rows )  => rows,
@@ -105,7 +105,7 @@ pub async fn list_users(
 pub async fn get_user (
     State(pool) : State<SqlitePool>,
     Path (id) : Path<i32>) -> impl IntoResponse{
-        let row = sqlx::query("SELECT name, age, relationship_years FROM users WHERE id = ?")
+        let row = sqlx::query("SELECT name, age, relationship_years FROM users WHERE id = ? AND active = 1")
         .bind(id)
         .fetch_optional(&pool)
         .await;
@@ -196,6 +196,40 @@ pub async fn get_user (
                 message: "Error al actualizar usuario".to_string(),
             };
             (StatusCode::INTERNAL_SERVER_ERROR, Json(response))
+        }
+    }
+}
+pub async fn delete_user (
+    State(pool): State<SqlitePool>,
+    Path(id) : Path<i32>
+) -> impl IntoResponse{
+    let result = sqlx::query("UPDATE users SET active = 0 WHERE id = ?")
+    .bind(id)
+    .execute(&pool)
+    .await;
+
+    match result {
+        Ok(res) if res.rows_affected() ==  0 => {
+            let response = ApiResponse{
+                success: false,
+                message :"Usuario no encontrado".to_string(),
+            };
+            (StatusCode::NOT_FOUND, Json(response))
+        }
+
+        Ok(_) => {
+            let response = ApiResponse{
+                success : true,
+                message: "Usuario eliminado exitosamente".to_string(),
+            };
+            (StatusCode::OK, Json(response))
+        }
+        Err(_) => {
+            let response = ApiResponse{
+                success : false,
+                message : "Error al eliminar usuario".to_string(),
+            };
+             (StatusCode::INTERNAL_SERVER_ERROR, Json(response))
         }
     }
 }
