@@ -73,11 +73,20 @@ if user.relationship_years > 100 {
 
 pub async fn list_users(
     State(pool): State<SqlitePool>
-) -> Json<Vec<User>> {
-    let rows = sqlx::query("SELECT name, age, relationship_years FROM users")
+) -> impl IntoResponse {
+    let rows = match sqlx::query("SELECT name, age, relationship_years FROM users")
         .fetch_all(&pool)
-        .await
-        .unwrap();
+        .await{
+    Ok(rows )  => rows,
+    Err(_) =>{
+        let response = ApiResponse{
+            success : false,
+            message : "Error al obtener usuarios".to_string(),
+        };
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json (response)).into_response();
+    }     
+        };
+        
 
     let users: Vec<User> = rows
         .iter()
@@ -88,5 +97,5 @@ pub async fn list_users(
         })
         .collect();
 
-    Json(users)
+    Json(users).into_response()
 }
