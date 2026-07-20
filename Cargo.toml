@@ -9,3 +9,4 @@ serde = { version = "1.0.228", features = ["derive"] }
 tokio = { version = "1.52.4", features = ["full"] }
 sqlx = { version = "0.7", features = ["runtime-tokio-native-tls", "sqlite", "chrono"] }
 chrono = "0.4"  
+dirs = "5"
