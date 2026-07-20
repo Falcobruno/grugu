@@ -1,3 +1,4 @@
+
 use axum::extract::Path;
 use axum::response::IntoResponse;
 use sqlx::Row;
@@ -135,3 +136,66 @@ pub async fn get_user (
         }
     }
     }
+    
+    
+    pub async fn update_user(
+    State(pool): State<SqlitePool>,
+    Path(id): Path<i32>,
+    Json(user): Json<User>
+) -> impl IntoResponse {
+    if user.name.trim().is_empty() {
+        let response = ApiResponse {
+            success: false,
+            message: "El nombre no puede estar vacío".to_string(),
+        };
+        return (StatusCode::BAD_REQUEST, Json(response));
+    }
+    if user.age == 0 {
+        let response = ApiResponse {
+            success: false,
+            message: "La edad debe ser mayor a 0".to_string(),
+        };
+        return (StatusCode::BAD_REQUEST, Json(response));
+    }
+    if user.relationship_years > 100 {
+        let response = ApiResponse {
+            success: false,
+            message: "El valor de años en pareja no es válido".to_string(),
+        };
+        return (StatusCode::BAD_REQUEST, Json(response));
+    }
+
+    let result = sqlx::query(
+        "UPDATE users SET name = ?, age = ?, relationship_years = ? WHERE id = ?"
+    )
+    .bind(&user.name)
+    .bind(user.age)
+    .bind(user.relationship_years)
+    .bind(id)
+    .execute(&pool)
+    .await;
+
+    match result {
+        Ok(res) if res.rows_affected() == 0 => {
+            let response = ApiResponse {
+                success: false,
+                message: "Usuario no encontrado".to_string(),
+            };
+            (StatusCode::NOT_FOUND, Json(response))
+        }
+        Ok(_) => {
+            let response = ApiResponse {
+                success: true,
+                message: "Usuario actualizado exitosamente".to_string(),
+            };
+            (StatusCode::OK, Json(response))
+        }
+        Err(_) => {
+            let response = ApiResponse {
+                success: false,
+                message: "Error al actualizar usuario".to_string(),
+            };
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(response))
+        }
+    }
+}
