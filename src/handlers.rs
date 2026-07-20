@@ -1,3 +1,4 @@
+use axum::extract::Path;
 use axum::response::IntoResponse;
 use sqlx::Row;
 use sqlx::SqlitePool;
@@ -99,3 +100,38 @@ pub async fn list_users(
 
     Json(users).into_response()
 }
+
+pub async fn get_user (
+    State(pool) : State<SqlitePool>,
+    Path (id) : Path<i32>) -> impl IntoResponse{
+        let row = sqlx::query("SELECT name, age, relationship_years FROM users WHERE id = ?")
+        .bind(id)
+        .fetch_optional(&pool)
+        .await;
+
+    match row {
+        Ok(Some(row)) => {
+            let user = User {
+                name:row.get(0),
+                age:row.get::<i32,_>(1)as u8,
+                relationship_years: row.get::<i32,_>(2)as u8,
+            };
+            Json(user).into_response()
+        }
+        Ok(None) =>   {
+            let response = ApiResponse{
+                success : false,
+                message : "Usuario no encontrado".to_string()
+            };
+            (StatusCode::NOT_FOUND, Json (response)).into_response()
+        }
+        Err(_) => {
+            let response = ApiResponse {
+
+                success: false,
+                message : "Error al buscar usuario".to_string(),
+            };
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(response)).into_response()
+        }
+    }
+    }

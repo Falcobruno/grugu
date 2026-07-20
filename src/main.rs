@@ -1,33 +1,22 @@
-use axum::{routing::{get,post},Router,};
-
-use handlers::{root,register};
-
+use axum::{routing::{get, post}, Router};
+use handlers::{list_users, register, root, get_user};
 use db::init_db;
-
-
-
-
 
 mod models;
 mod handlers;
 mod db;
 
-
-
-
 #[tokio::main]
 async fn main() {
-    let _pool= init_db().await;
+    let _pool = init_db().await;
     db::create_users_table(&_pool).await;
 
-
-let app = Router::new()
-    .route("/", get(root))
-    .route("/register", post(register))
-    .with_state(_pool);
-
-
-
+    let app = Router::new()
+        .route("/", get(root))
+        .route("/register", post(register))
+        .route("/users", get(list_users))
+        .route ("/user/{id}", get(get_user))
+        .with_state(_pool);
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
         .await
@@ -39,4 +28,3 @@ let app = Router::new()
         .await
         .unwrap();
 }
-
