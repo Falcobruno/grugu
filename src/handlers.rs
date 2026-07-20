@@ -1,9 +1,14 @@
+use axum::response::IntoResponse;
+use sqlx::Row;
 use sqlx::SqlitePool;
 use axum::extract::State;
 use axum::Json;
 use crate::models::api_response::ApiResponse;
 use crate::models::api_status::ApiStatus;
 use crate::models::user::User;
+use axum::http::StatusCode;
+
+
 
 pub async fn root() -> Json<ApiStatus> {
     let status = ApiStatus {
@@ -17,7 +22,28 @@ pub async fn root() -> Json<ApiStatus> {
 pub async fn register(
     State(pool): State<SqlitePool>,
     Json(user): Json<User>
-) -> Json<ApiResponse> {
+) -> impl IntoResponse {
+    if user.name.trim().is_empty(){
+        let response = ApiResponse{
+            success: false,
+            message:"el nombre no puede estar vacío.".to_string(),
+        };
+        return (StatusCode::BAD_REQUEST, Json(response));
+    }
+    if user.age == 0 {
+    let response = ApiResponse {
+        success: false,
+        message: "La edad debe ser mayor a 0".to_string(),
+    };
+    return (StatusCode::BAD_REQUEST, Json(response));
+}
+if user.relationship_years > 100 {
+    let response = ApiResponse {
+        success: false,
+        message: "El valor de años en pareja no es válido".to_string(),
+    };
+    return (StatusCode::BAD_REQUEST, Json(response));
+}
     let result = sqlx::query(
         "INSERT INTO users (name, age, relationship_years) VALUES (?, ?, ?)"
     )
@@ -33,14 +59,34 @@ pub async fn register(
                 success: true,
                 message: "Usuario registrado exitosamente".to_string(),
             };
-            Json(response)
+            (StatusCode::OK, Json(response))
         }
         Err(_) => {
             let response = ApiResponse {
                 success: false,
                 message: "Error al registrar usuario".to_string(),
             };
-            Json(response)
+           (StatusCode::INTERNAL_SERVER_ERROR, Json(response))
         }
     }
+}
+
+pub async fn list_users(
+    State(pool): State<SqlitePool>
+) -> Json<Vec<User>> {
+    let rows = sqlx::query("SELECT name, age, relationship_years FROM users")
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+
+    let users: Vec<User> = rows
+        .iter()
+        .map(|row| User {
+            name: row.get(0),
+            age: row.get::<i32, _>(1) as u8,
+            relationship_years: row.get::<i32, _>(2) as u8,
+        })
+        .collect();
+
+    Json(users)
 }
