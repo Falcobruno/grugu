@@ -23,7 +23,8 @@ pub async fn create_users_table(pool: &SqlitePool) {
     age INTEGER NOT NULL,
     relationship_years INTEGER NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    active BOOLEAN NOT NULL DEFAULT 1
+    active BOOLEAN NOT NULL DEFAULT 1,
+    password NOT NULL
 )"
     )
     .execute(pool)

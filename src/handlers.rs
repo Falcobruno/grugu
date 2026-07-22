@@ -1,4 +1,4 @@
-
+use bcrypt::hash;
 use axum::extract::Path;
 use axum::response::IntoResponse;
 use sqlx::Row;
@@ -7,10 +7,9 @@ use axum::extract::State;
 use axum::Json;
 use crate::models::api_response::ApiResponse;
 use crate::models::api_status::ApiStatus;
+use crate::models::user::PublicUser;
 use crate::models::user::User;
 use axum::http::StatusCode;
-
-
 
 pub async fn root() -> Json<ApiStatus> {
     let status = ApiStatus {
@@ -33,25 +32,29 @@ pub async fn register(
         return (StatusCode::BAD_REQUEST, Json(response));
     }
     if user.age == 0 {
-    let response = ApiResponse {
-        success: false,
-        message: "La edad debe ser mayor a 0".to_string(),
-    };
-    return (StatusCode::BAD_REQUEST, Json(response));
-}
-if user.relationship_years > 100 {
-    let response = ApiResponse {
-        success: false,
-        message: "El valor de años en pareja no es válido".to_string(),
-    };
-    return (StatusCode::BAD_REQUEST, Json(response));
-}
+        let response = ApiResponse {
+            success: false,
+            message: "La edad debe ser mayor a 0".to_string(),
+        };
+        return (StatusCode::BAD_REQUEST, Json(response));
+    }
+    if user.relationship_years > 100 {
+        let response = ApiResponse {
+            success: false,
+            message: "El valor de años en pareja no es válido".to_string(),
+        };
+        return (StatusCode::BAD_REQUEST, Json(response));
+    }
+
+    let hashed_password = hash(&user.password, bcrypt::DEFAULT_COST).unwrap();
+
     let result = sqlx::query(
-        "INSERT INTO users (name, age, relationship_years) VALUES (?, ?, ?)"
+        "INSERT INTO users (name, age, relationship_years, password) VALUES (?, ?, ?, ?)"
     )
     .bind(&user.name)
     .bind(user.age)
     .bind(user.relationship_years)
+    .bind(&hashed_password)
     .execute(&pool)
     .await;
 
@@ -63,10 +66,10 @@ if user.relationship_years > 100 {
             };
             (StatusCode::OK, Json(response))
         }
-        Err(_) => {
+        Err(e) => {
             let response = ApiResponse {
                 success: false,
-                message: "Error al registrar usuario".to_string(),
+                message: format!("Error al registrar usuario: {:?}", e),
             };
            (StatusCode::INTERNAL_SERVER_ERROR, Json(response))
         }
@@ -88,11 +91,11 @@ pub async fn list_users(
         return (StatusCode::INTERNAL_SERVER_ERROR, Json (response)).into_response();
     }     
         };
-        
 
-    let users: Vec<User> = rows
+
+    let users: Vec<PublicUser> = rows
         .iter()
-        .map(|row| User {
+        .map(|row| PublicUser {
             name: row.get(0),
             age: row.get::<i32, _>(1) as u8,
             relationship_years: row.get::<i32, _>(2) as u8,
@@ -112,7 +115,7 @@ pub async fn get_user (
 
     match row {
         Ok(Some(row)) => {
-            let user = User {
+            let user = PublicUser {
                 name:row.get(0),
                 age:row.get::<i32,_>(1)as u8,
                 relationship_years: row.get::<i32,_>(2)as u8,
@@ -128,7 +131,6 @@ pub async fn get_user (
         }
         Err(_) => {
             let response = ApiResponse {
-
                 success: false,
                 message : "Error al buscar usuario".to_string(),
             };
@@ -136,9 +138,9 @@ pub async fn get_user (
         }
     }
     }
-    
-    
-    pub async fn update_user(
+
+
+pub async fn update_user(
     State(pool): State<SqlitePool>,
     Path(id): Path<i32>,
     Json(user): Json<User>
@@ -199,6 +201,7 @@ pub async fn get_user (
         }
     }
 }
+
 pub async fn delete_user (
     State(pool): State<SqlitePool>,
     Path(id) : Path<i32>
@@ -216,7 +219,6 @@ pub async fn delete_user (
             };
             (StatusCode::NOT_FOUND, Json(response))
         }
-
         Ok(_) => {
             let response = ApiResponse{
                 success : true,

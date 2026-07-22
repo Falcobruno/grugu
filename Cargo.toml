@@ -10,3 +10,6 @@ tokio = { version = "1.52.4", features = ["full"] }
 sqlx = { version = "0.7", features = ["runtime-tokio-native-tls", "sqlite", "chrono"] }
 chrono = "0.4"  
 dirs = "5"
+bcrypt = "0.15"
+jsonwebtoken = "9"
+serde_json = "1"
