@@ -16,6 +16,7 @@ use crate::models::claims::Claims;
 use crate::models::user::LoginRequest;
 use chrono::Utc;
 use axum::{middleware::Next, extract::Request};
+use axum::extract::Extension;
 
 pub async fn root() -> Json<ApiStatus> {
     let status = ApiStatus {
@@ -149,8 +150,18 @@ pub async fn get_user (
 pub async fn update_user(
     State(pool): State<SqlitePool>,
     Path(id): Path<i32>,
+    Extension(claims): Extension<Claims>,
     Json(user): Json<User>
 ) -> impl IntoResponse {
+    if claims.sub != id{
+        let response = ApiResponse {
+            success:false,
+            message: "No tenés permiso para modificar este usuario".to_string(),
+        };
+
+        return  (StatusCode::FORBIDDEN, Json(response));
+
+    }
     if user.name.trim().is_empty() {
         let response = ApiResponse {
             success: false,
@@ -210,8 +221,16 @@ pub async fn update_user(
 
 pub async fn delete_user (
     State(pool): State<SqlitePool>,
-    Path(id) : Path<i32>
+    Path(id) : Path<i32>,
+    Extension(claims): Extension<Claims>
 ) -> impl IntoResponse{
+    if claims.sub != id{
+        let response = ApiResponse{
+            success:false,
+            message :"No tenés permiso para eliminar este usuario".to_string(),
+        };
+         return (StatusCode::FORBIDDEN, Json(response));
+    }
     let result = sqlx::query("UPDATE users SET active = 0 WHERE id = ?")
     .bind(id)
     .execute(&pool)
