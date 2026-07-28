@@ -1,6 +1,7 @@
 use axum::{routing::{get, post}, Router};
+use axum::middleware;
 use db::init_db;
-use handlers::{list_users, register, root, get_user, update_user, delete_user, login};
+use handlers::{list_users, register, root, get_user, update_user, delete_user, login, auth_middleware};
 
 mod models;
 mod handlers;
@@ -11,14 +12,21 @@ async fn main() {
     let _pool = init_db().await;
     db::create_users_table(&_pool).await;
 
-    let app = Router::new()
+    let protected_routes = Router::new()
+        .route("/users", get(list_users))
+        .route("/user/{id}", get(get_user))
+        .route("/user/{id}", axum::routing::put(update_user))
+        .route("/user/{id}", axum::routing::delete(delete_user))
+        .route_layer(middleware::from_fn(auth_middleware));
+
+    let public_routes = Router::new()
         .route("/", get(root))
         .route("/register", post(register))
-        .route("/users", get(list_users))
-        .route ("/user/{id}", get(get_user))
-        .route ("/user/{id}", axum::routing::put(update_user))
-        .route ("/user/{id}", axum::routing::delete(delete_user))
-        .route ("/login", post (login))
+        .route("/login", post(login));
+
+    let app = Router::new()
+        .merge(public_routes)
+        .merge(protected_routes)
         .with_state(_pool);
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
@@ -31,4 +39,3 @@ async fn main() {
         .await
         .unwrap();
 }
-

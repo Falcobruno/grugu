@@ -1,9 +1,7 @@
-use axum::routing::get;
 use bcrypt::hash;
 use axum::extract::Path;
 use axum::response::IntoResponse;
 use sqlx::Row;
-use sqlx::Sqlite;
 use sqlx::SqlitePool;
 use axum::extract::State;
 use axum::Json;
@@ -13,10 +11,11 @@ use crate::models::user::PublicUser;
 use crate::models::user::User;
 use axum::http::StatusCode;
 use bcrypt::verify;
-use jsonwebtoken::{encode, Header, EncodingKey};
+use jsonwebtoken::{encode, decode, Header, EncodingKey, DecodingKey, Validation};
 use crate::models::claims::Claims;
 use crate::models::user::LoginRequest;
 use chrono::Utc;
+use axum::{middleware::Next, extract::Request};
 
 pub async fn root() -> Json<ApiStatus> {
     let status = ApiStatus {
@@ -73,13 +72,13 @@ pub async fn register(
             };
             (StatusCode::OK, Json(response))
         }
-       Err(_) => {
-    let response = ApiResponse {
-        success: false,
-        message: "Error al registrar usuario".to_string(),
-    };
-   (StatusCode::INTERNAL_SERVER_ERROR, Json(response))
-}
+        Err(_) => {
+            let response = ApiResponse {
+                success: false,
+                message: "Error al registrar usuario".to_string(),
+            };
+           (StatusCode::INTERNAL_SERVER_ERROR, Json(response))
+        }
     }
 }
 
@@ -269,7 +268,7 @@ pub async fn login (
             return (StatusCode::INTERNAL_SERVER_ERROR, Json(response)).into_response();
         }
     };
-    let user_id :i32 =row.get(0);
+    let user_id: i32 = row.get(0);
     let stored_hash: String = row.get(1);
     let password_matches = verify(&login_req.password, &stored_hash).unwrap_or(false);
 
@@ -300,4 +299,43 @@ pub async fn login (
     Json(serde_json::json!({ "token": token })).into_response()
 }
 
+pub async fn auth_middleware (
+    mut req: Request,
+    next: Next
+) -> Result<impl IntoResponse, impl IntoResponse> {
+    let auth_header = req.headers()
+        .get("Authorization")
+        .and_then(|h| h.to_str().ok());
 
+    let token = match auth_header {
+        Some(h) if h.starts_with("Bearer ") => h.trim_start_matches("Bearer ").to_string(),
+        _ => {
+            let response = ApiResponse {
+                success: false,
+                message: "Token no provisto".to_string(),
+            };
+            return Err((StatusCode::UNAUTHORIZED, Json(response)));
+        }
+    };
+
+    let claims = decode::<Claims>(
+        &token,
+        &DecodingKey::from_secret("secreto_super_seguro".as_ref()),
+        &Validation::default()
+    );
+
+    let claims = match claims {
+        Ok(data) => data.claims,
+        Err(_) => {
+            let response = ApiResponse {
+                success: false,
+                message: "Token inválido o expirado".to_string(),
+            };
+            return Err((StatusCode::UNAUTHORIZED, Json(response)));
+        }
+    };
+
+    req.extensions_mut().insert(claims);
+
+    Ok(next.run(req).await)
+}
