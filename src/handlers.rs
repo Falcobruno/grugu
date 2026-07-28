@@ -358,3 +358,107 @@ pub async fn auth_middleware (
 
     Ok(next.run(req).await)
 }
+
+pub async fn link_partner(
+    State(pool): State<SqlitePool>,
+    Extension(claims): Extension<Claims>,
+    Path(partner_id): Path<i32>
+) -> impl IntoResponse {
+    let my_id = claims.sub;
+
+    if my_id == partner_id {
+        let response = ApiResponse {
+            success: false,
+            message: "No podés vincularte con vos mismo".to_string(),
+        };
+        return (StatusCode::BAD_REQUEST, Json(response));
+    }
+
+    let my_row = sqlx::query("SELECT partner_id FROM users WHERE id = ? AND active = 1")
+        .bind(my_id)
+        .fetch_optional(&pool)
+        .await;
+
+    let my_partner_id: Option<i32> = match my_row {
+        Ok(Some(row)) => row.get(0),
+        Ok(None) => {
+            let response = ApiResponse {
+                success: false,
+                message: "Usuario no encontrado".to_string(),
+            };
+            return (StatusCode::NOT_FOUND, Json(response));
+        }
+        Err(_) => {
+            let response = ApiResponse {
+                success: false,
+                message: "Error al buscar usuario".to_string(),
+            };
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(response));
+        }
+    };
+
+    if my_partner_id.is_some() {
+        let response = ApiResponse {
+            success: false,
+            message: "Ya tenés una pareja vinculada".to_string(),
+        };
+        return (StatusCode::BAD_REQUEST, Json(response));
+    }
+
+    let partner_row = sqlx::query("SELECT partner_id FROM users WHERE id = ? AND active = 1")
+        .bind(partner_id)
+        .fetch_optional(&pool)
+        .await;
+
+    let partner_partner_id: Option<i32> = match partner_row {
+        Ok(Some(row)) => row.get(0),
+        Ok(None) => {
+            let response = ApiResponse {
+                success: false,
+                message: "El usuario a vincular no existe".to_string(),
+            };
+            return (StatusCode::NOT_FOUND, Json(response));
+        }
+        Err(_) => {
+            let response = ApiResponse {
+                success: false,
+                message: "Error al buscar el usuario a vincular".to_string(),
+            };
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(response));
+        }
+    };
+
+    if partner_partner_id.is_some() {
+        let response = ApiResponse {
+            success: false,
+            message: "Ese usuario ya tiene una pareja vinculada".to_string(),
+        };
+        return (StatusCode::BAD_REQUEST, Json(response));
+    }
+
+    let result1 = sqlx::query("UPDATE users SET partner_id = ? WHERE id = ?")
+        .bind(partner_id)
+        .bind(my_id)
+        .execute(&pool)
+        .await;
+
+    let result2 = sqlx::query("UPDATE users SET partner_id = ? WHERE id = ?")
+        .bind(my_id)
+        .bind(partner_id)
+        .execute(&pool)
+        .await;
+
+    if result1.is_err() || result2.is_err() {
+        let response = ApiResponse {
+            success: false,
+            message: "Error al vincular usuarios".to_string(),
+        };
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(response));
+    }
+
+    let response = ApiResponse {
+        success: true,
+        message: "Usuarios vinculados exitosamente".to_string(),
+    };
+    (StatusCode::OK, Json(response))
+}

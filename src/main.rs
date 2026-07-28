@@ -1,7 +1,8 @@
 use axum::{routing::{get, post}, Router};
 use axum::middleware;
 use db::init_db;
-use handlers::{list_users, register, root, get_user, update_user, delete_user, login, auth_middleware};
+use handlers::{list_users, register, root, 
+get_user, update_user, delete_user, login, auth_middleware, link_partner};
 
 mod models;
 mod handlers;
@@ -17,6 +18,7 @@ async fn main() {
         .route("/user/{id}", get(get_user))
         .route("/user/{id}", axum::routing::put(update_user))
         .route("/user/{id}", axum::routing::delete(delete_user))
+        .route ("/link/{partener_id}", post (link_partner))
         .route_layer(middleware::from_fn(auth_middleware));
 
     let public_routes = Router::new()
