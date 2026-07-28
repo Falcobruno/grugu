@@ -1,7 +1,9 @@
+use axum::routing::get;
 use bcrypt::hash;
 use axum::extract::Path;
 use axum::response::IntoResponse;
 use sqlx::Row;
+use sqlx::Sqlite;
 use sqlx::SqlitePool;
 use axum::extract::State;
 use axum::Json;
@@ -10,6 +12,11 @@ use crate::models::api_status::ApiStatus;
 use crate::models::user::PublicUser;
 use crate::models::user::User;
 use axum::http::StatusCode;
+use bcrypt::verify;
+use jsonwebtoken::{encode, Header, EncodingKey};
+use crate::models::claims::Claims;
+use crate::models::user::LoginRequest;
+use chrono::Utc;
 
 pub async fn root() -> Json<ApiStatus> {
     let status = ApiStatus {
@@ -66,13 +73,13 @@ pub async fn register(
             };
             (StatusCode::OK, Json(response))
         }
-        Err(e) => {
-            let response = ApiResponse {
-                success: false,
-                message: format!("Error al registrar usuario: {:?}", e),
-            };
-           (StatusCode::INTERNAL_SERVER_ERROR, Json(response))
-        }
+       Err(_) => {
+    let response = ApiResponse {
+        success: false,
+        message: "Error al registrar usuario".to_string(),
+    };
+   (StatusCode::INTERNAL_SERVER_ERROR, Json(response))
+}
     }
 }
 
@@ -235,3 +242,62 @@ pub async fn delete_user (
         }
     }
 }
+
+pub async fn login (
+    State(pool): State<SqlitePool>,
+    Json (login_req) : Json <LoginRequest>,
+)-> impl IntoResponse{
+    let row = sqlx::query("SELECT id, password FROM users WHERE name = ? AND active = 1")
+    .bind(&login_req.name)
+    .fetch_optional(&pool)
+    .await;
+
+    let row = match row{
+        Ok(Some(row)) => row,
+        Ok(None) => {
+            let response = ApiResponse{
+                success : false,
+                message : "Usuario o contraseña no válida".to_string(),
+            };
+            return (StatusCode::UNAUTHORIZED, Json(response)).into_response();
+        }
+        Err(_) => {
+            let response = ApiResponse {
+                success:false,
+                message:"Error al buscar usuario".to_string(),
+            };
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(response)).into_response();
+        }
+    };
+    let user_id :i32 =row.get(0);
+    let stored_hash: String = row.get(1);
+    let password_matches = verify(&login_req.password, &stored_hash).unwrap_or(false);
+
+    if !password_matches {
+        let response = ApiResponse {
+            success: false,
+            message: "Usuario o contraseña incorrectos".to_string(),
+        };
+        return (StatusCode::UNAUTHORIZED, Json(response)).into_response();
+    }
+
+    let expiration = Utc::now()
+        .checked_add_signed(chrono::Duration::hours(24))
+        .unwrap()
+        .timestamp() as usize;
+
+    let claims = Claims {
+        sub: user_id,
+        exp: expiration,
+    };
+
+    let token = encode(
+        &Header::default(),
+        &claims,
+        &EncodingKey::from_secret("secreto_super_seguro".as_ref())
+    ).unwrap();
+
+    Json(serde_json::json!({ "token": token })).into_response()
+}
+
+

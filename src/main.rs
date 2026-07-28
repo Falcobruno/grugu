@@ -1,6 +1,6 @@
 use axum::{routing::{get, post}, Router};
-use handlers::{list_users, register, root, get_user, update_user, delete_user};
 use db::init_db;
+use handlers::{list_users, register, root, get_user, update_user, delete_user, login};
 
 mod models;
 mod handlers;
@@ -18,6 +18,7 @@ async fn main() {
         .route ("/user/{id}", get(get_user))
         .route ("/user/{id}", axum::routing::put(update_user))
         .route ("/user/{id}", axum::routing::delete(delete_user))
+        .route ("/login", post (login))
         .with_state(_pool);
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")

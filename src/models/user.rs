@@ -15,3 +15,9 @@ pub struct PublicUser{
     pub age :u8,
     pub relationship_years: u8,
 }
+
+#[derive (Deserialize)]
+pub struct LoginRequest{
+    pub name :String,
+    pub password:String,
+}
