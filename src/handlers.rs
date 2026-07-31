@@ -7,6 +7,7 @@ use axum::extract::State;
 use axum::Json;
 use crate::models::api_response::ApiResponse;
 use crate::models::api_status::ApiStatus;
+use crate::models::mood::MoodRequest;
 use crate::models::user::PublicUser;
 use crate::models::user::User;
 use axum::http::StatusCode;
@@ -461,4 +462,41 @@ pub async fn link_partner(
         message: "Usuarios vinculados exitosamente".to_string(),
     };
     (StatusCode::OK, Json(response))
+}
+
+pub async fn add_mood(
+    State(pool): State<SqlitePool>,
+    Extension(claims): Extension<Claims>,
+    Json(mood): Json<MoodRequest>
+) -> impl IntoResponse{
+    let ai_response_to_user = "Una respuesta de la IA ".to_string();
+    let ai_suggestion_to_partner = "Sugerencia generada por IA".to_string();
+
+    let result = sqlx::query(
+        "INSERT INTO mood_entries (user_id, text, ai_response_to_user, ai_suggestion_to_partner) VALUES (?, ?, ?, ?)"
+    )
+
+    .bind(claims.sub)
+    .bind(&mood.text)
+    .bind(&ai_response_to_user)
+    .bind(&ai_suggestion_to_partner)
+    .execute(&pool)
+    .await;
+
+     match result {
+        Ok(_) => {
+            let response = ApiResponse {
+                success: true,
+                message: ai_response_to_user,
+            };
+            (StatusCode::OK, Json(response))
+        }
+        Err(_) => {
+            let response = ApiResponse {
+                success: false,
+                message: "Error al guardar el registro".to_string(),
+            };
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(response))
+        }
+    }
 }

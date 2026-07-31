@@ -32,3 +32,19 @@ pub async fn create_users_table(pool: &SqlitePool) {
     .await
     .expect("No se pudo crear la tabla users");
 }
+
+pub async fn create_mood_entries_table(pool: &SqlitePool) {
+    sqlx::query(
+        "CREATE TABLE IF NOT EXISTS mood_entries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            text TEXT NOT NULL,
+            ai_response_to_user TEXT,
+            ai_suggestion_to_partner TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )"
+    )
+    .execute(pool)
+    .await
+    .expect("No se pudo crear la tabla mood_entries");
+}
