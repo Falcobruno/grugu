@@ -18,6 +18,7 @@ use crate::models::user::LoginRequest;
 use chrono::Utc;
 use axum::{middleware::Next, extract::Request};
 use axum::extract::Extension;
+use tracing::info;
 
 pub async fn root() -> Json<ApiStatus> {
     let status = ApiStatus {
@@ -68,6 +69,7 @@ pub async fn register(
 
     match result {
         Ok(_) => {
+            info!("Usuario registrado: {}", user.name);
             let response = ApiResponse {
                 success: true,
                 message: "Usuario registrado exitosamente".to_string(),
@@ -291,6 +293,7 @@ pub async fn login (
     let user_id: i32 = row.get(0);
     let stored_hash: String = row.get(1);
     let password_matches = verify(&login_req.password, &stored_hash).unwrap_or(false);
+    info!("Login exitoso: {}", login_req.name);
 
     if !password_matches {
         let response = ApiResponse {
@@ -347,6 +350,7 @@ pub async fn auth_middleware (
     let claims = match claims {
         Ok(data) => data.claims,
         Err(_) => {
+            info!("Intento de acceso con token inválido");
             let response = ApiResponse {
                 success: false,
                 message: "Token inválido o expirado".to_string(),

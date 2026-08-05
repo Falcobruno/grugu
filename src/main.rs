@@ -2,6 +2,7 @@ use axum::{routing::{get, post}, Router};
 use axum::middleware;
 use db::init_db;
 use handlers::{list_users, register, root, get_user, update_user, delete_user, login, auth_middleware, link_partner, add_mood};
+use tracing_subscriber;
 
 mod models;
 mod handlers;
@@ -9,6 +10,7 @@ mod db;
 
 #[tokio::main]
 async fn main() {
+      tracing_subscriber::fmt::init();
     let _pool = init_db().await;
     db::create_users_table(&_pool).await;
     db::create_mood_entries_table(&_pool).await;
