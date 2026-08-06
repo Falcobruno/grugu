@@ -21,3 +21,9 @@ pub struct LoginRequest{
     pub name :String,
     pub password:String,
 }
+
+#[derive(Deserialize)]
+pub struct ChangePasswordRequest {
+    pub old_password: String,
+    pub new_password: String,
+}

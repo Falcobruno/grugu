@@ -19,6 +19,7 @@ use chrono::Utc;
 use axum::{middleware::Next, extract::Request};
 use axum::extract::Extension;
 use tracing::info;
+use crate::models::user::ChangePasswordRequest;
 
 pub async fn root() -> Json<ApiStatus> {
     let status = ApiStatus {
@@ -499,6 +500,70 @@ pub async fn add_mood(
             let response = ApiResponse {
                 success: false,
                 message: "Error al guardar el registro".to_string(),
+            };
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(response))
+        }
+    }
+}
+
+pub async fn change_password(
+    State(pool): State<SqlitePool>,
+    Extension(claims): Extension<Claims>,
+    Json(req): Json<ChangePasswordRequest>
+) -> impl IntoResponse {
+    let row = sqlx::query("SELECT password FROM users WHERE id = ? AND active = 1")
+        .bind(claims.sub)
+        .fetch_optional(&pool)
+        .await;
+
+    let stored_hash: String = match row {
+        Ok(Some(row)) => row.get(0),
+        Ok(None) => {
+            let response = ApiResponse {
+                success: false,
+                message: "Usuario no encontrado".to_string(),
+            };
+            return (StatusCode::NOT_FOUND, Json(response));
+        }
+        Err(_) => {
+            let response = ApiResponse {
+                success: false,
+                message: "Error al buscar usuario".to_string(),
+            };
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(response));
+        }
+    };
+
+    let old_password_matches = verify(&req.old_password, &stored_hash).unwrap_or(false);
+
+    if !old_password_matches {
+        let response = ApiResponse {
+            success: false,
+            message: "Contraseña actual incorrecta".to_string(),
+        };
+        return (StatusCode::UNAUTHORIZED, Json(response));
+    }
+
+    let new_hashed_password = hash(&req.new_password, bcrypt::DEFAULT_COST).unwrap();
+
+    let result = sqlx::query("UPDATE users SET password = ? WHERE id = ?")
+        .bind(&new_hashed_password)
+        .bind(claims.sub)
+        .execute(&pool)
+        .await;
+
+    match result {
+        Ok(_) => {
+            let response = ApiResponse {
+                success: true,
+                message: "Contraseña actualizada exitosamente".to_string(),
+            };
+            (StatusCode::OK, Json(response))
+        }
+        Err(_) => {
+            let response = ApiResponse {
+                success: false,
+                message: "Error al actualizar contraseña".to_string(),
             };
             (StatusCode::INTERNAL_SERVER_ERROR, Json(response))
         }
